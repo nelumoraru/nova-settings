@@ -1,6 +1,6 @@
 <?php
 
-namespace OptimistDigital\NovaSettings;
+namespace Outl1ne\NovaSettings;
 
 use Illuminate\Support\Str;
 
@@ -76,7 +76,7 @@ class NovaSettingsStore
             return collect($settingKeys)->flatMap(function ($settingKey) use ($settings, $defaults) {
                 $settingValue = $settings[$settingKey] ?? null;
 
-                if (!empty($settingValue)) {
+                if (isset($settingValue)) {
                     $this->cache[$settingKey] = $settingValue;
                     return [$settingKey => $settingValue];
                 } else {
@@ -99,6 +99,21 @@ class NovaSettingsStore
         $setting->save();
         unset($this->cache[$settingKey]);
         return $setting;
+    }
+
+    public function clearCache($keyNames = null)
+    {
+        // Clear whole cache
+        if (empty($keyNames)) {
+            $this->cache = [];
+            return;
+        }
+
+        // Clear specific keys
+        if (is_string($keyNames)) $keyNames = [$keyNames];
+        foreach ($keyNames as $key) {
+            unset($this->cache[$key]);
+        }
     }
 
     public function clearFields()

@@ -1,28 +1,16 @@
 <template>
-  <loading-view :loading="loading" :key="$route.params.id">
-    <form v-if="panels" @submit.prevent="update" autocomplete="off" dusk="nova-settings-form">
-      <template v-for="(panel, i) in panelsWithFields">
-        <template v-if="panel.component === 'detail-tabs' || panel.component === 'form-tabs'">
-          <h1 class="text-90 font-normal text-2xl mb-3 nova-heading" :key="i">{{ panel.name }}</h1>
-          <form-tabs
-            :key="i"
-            :resource-name="'nova-settings'"
-            :resource-id="$route.params.id || 'general'"
-            :errors="validationErrors"
-            :field="{ component: 'tabs', fields: panel.fields }"
-            :name="panel.name"
-            class="mb-3"
-          />
-        </template>
+  <LoadingView :loading="loading" :key="pageId">
+    <Head :title="__('novaSettings.navigationItemTitle') + (pageId !== 'general' ? ` (${pageId})` : '')" />
 
-        <form-panel
-          v-else
+    <form v-if="fields && fields.length" @submit.prevent="update" autocomplete="off" dusk="nova-settings-form">
+      <template v-for="panel in panelsWithFields" :key="panel.name">
+        <component
+          :is="`form-` + panel.component"
           :panel="panel"
           :name="panel.name"
-          :key="panel.name"
           :fields="panel.fields"
           :resource-name="'nova-settings'"
-          :resource-id="$route.params.id || 'general'"
+          :resource-id="pageId"
           mode="form"
           class="mb-6"
           :validation-errors="validationErrors"
@@ -30,36 +18,29 @@
       </template>
       <!-- Update Button -->
       <div class="flex items-center" v-if="authorizations.authorizedToUpdate">
-        <progress-button type="submit" class="ml-auto" :disabled="isUpdating" :processing="isUpdating">
+        <LoadingButton type="submit" class="ml-auto" :disabled="isUpdating" :processing="isUpdating">
           {{ __('novaSettings.saveButtonText') }}
-        </progress-button>
+        </LoadingButton>
       </div>
     </form>
 
-    <div class="py-3 px-6 border-50" v-else>
-      <div class="flex">
-        <div class="w-1/4 py-4">
-          <h4 class="font-normal text-80">Error</h4>
-        </div>
-        <div class="w-3/4 py-4">
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-3" v-else>
+      <div class="flex flex-col justify-center align-center">
+        <div class="w-3/4 py-4 text-center">
           <p class="text-90">{{ __('novaSettings.noSettingsFieldsText') }}</p>
         </div>
       </div>
     </div>
-  </loading-view>
+  </LoadingView>
 </template>
 
 <script>
 import { Errors } from 'laravel-nova';
 
 export default {
-  metaInfo() {
-    return {
-      title: this.__('novaSettings.navigationItemTitle'),
-    };
-  },
   data() {
     return {
+      pageId: false,
       loading: false,
       isUpdating: false,
       fields: [],
@@ -69,12 +50,9 @@ export default {
     };
   },
   async created() {
+    this.pageId = this.$page.props.pageId || 'general';
+
     this.getFields();
-  },
-  watch: {
-    $route(to, from) {
-      if (to.params.id !== from.params.id) this.getFields();
-    },
   },
   methods: {
     async getFields() {
@@ -82,7 +60,7 @@ export default {
       this.fields = [];
 
       const params = { editing: true, editMode: 'update' };
-      if (this.$route.params.id) params.path = this.$route.params.id;
+      if (this.pageId) params.path = this.pageId;
 
       const {
         data: { fields, panels, authorizations },
@@ -90,7 +68,7 @@ export default {
         .get('/nova-vendor/nova-settings/settings', { params })
         .catch(error => {
           if (error.response.status == 404) {
-            this.$router.push({ name: '404' });
+            // this.$router.push({ name: '404' });
             return;
           }
         });
@@ -103,13 +81,17 @@ export default {
       try {
         this.isUpdating = true;
         const response = await this.updateRequest();
-        if (response && response.data && response.data.reload === true) {
-          location.reload();
-          return;
+        if (response && response.data) {
+          if (response.data.reload === true) {
+            location.reload();
+            return;
+          } else if (response.data.redirect && response.data.redirect.length > 0) {
+            location.replace(response.data.redirect);
+            return;
+          }
         }
-        this.$toasted.show(this.__('novaSettings.settingsSuccessToast'), {
-          type: 'success',
-        });
+        Nova.success(this.__('novaSettings.settingsSuccessToast'));
+
         // Reset the form by refetching the fields
         await this.getFields();
         this.isUpdating = false;
@@ -129,28 +111,23 @@ export default {
   },
   computed: {
     formData() {
-      return _.tap(new FormData(), formData => {
-        _(this.fields).each(field => field.fill(formData));
-        formData.append('_method', 'POST');
-        if (this.$route.params.id) formData.append('path', this.$route.params.id);
-      });
+      const formData = new FormData();
+      this.fields.forEach(field => field.fill(formData));
+      formData.append('_method', 'POST');
+      if (this.pageId) formData.append('path', this.pageId);
+      return formData;
     },
     panelsWithFields() {
-      return _.map(this.panels, panel => {
+      return this.panels.map(panel => {
         return {
           name: panel.name,
           component: panel.component,
           helpText: panel.helpText,
-          fields: _.filter(this.fields, field => field.panel == panel.name),
+          fields: this.fields.filter(field => field.panel === panel.name),
+          showTitle: panel.showTitle,
         };
       });
     },
   },
 };
 </script>
-
-<style scoped>
-.relationship-tabs-panel {
-  flex-direction: column;
-}
-</style>

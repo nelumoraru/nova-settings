@@ -1,12 +1,14 @@
 <?php
 
-namespace OptimistDigital\NovaSettings;
+namespace Outl1ne\NovaSettings;
 
+use Laravel\Nova\Nova;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use OptimistDigital\NovaSettings\Http\Middleware\Authorize;
-use OptimistDigital\NovaSettings\Http\Middleware\SettingsPathExists;
-use OptimistDigital\NovaTranslationsLoader\LoadsNovaTranslations;
+use Laravel\Nova\Http\Middleware\Authenticate;
+use Outl1ne\NovaSettings\Http\Middleware\Authorize;
+use Outl1ne\NovaTranslationsLoader\LoadsNovaTranslations;
+use Outl1ne\NovaSettings\Http\Middleware\SettingsPathExists;
 
 class NovaSettingsServiceProvider extends ServiceProvider
 {
@@ -19,9 +21,8 @@ class NovaSettingsServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'nova-settings');
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
-        $this->loadTranslations(__DIR__ . '/../resources/lang', 'nova-settings', true);
+        $this->loadTranslations(__DIR__ . '/../lang', 'nova-settings', true);
 
         if ($this->app->runningInConsole()) {
             // Publish migrations
@@ -52,6 +53,15 @@ class NovaSettingsServiceProvider extends ServiceProvider
 
     protected function registerRoutes()
     {
+        // Register nova routes
+        Nova::router()->group(function ($router) {
+            $path = config('nova-settings.base_path', 'nova-settings');
+
+            $router
+                ->get("{$path}/{pageId?}", fn ($pageId = 'general') => inertia('NovaSettings', ['basePath' => $path, 'pageId' => $pageId]))
+                ->middleware(['nova', Authenticate::class]);
+        });
+
         if ($this->app->routesAreCached()) return;
 
         Route::middleware(['nova', Authorize::class, SettingsPathExists::class])

@@ -1,36 +1,40 @@
 <?php
 
-namespace OptimistDigital\NovaSettings;
+namespace Outl1ne\NovaSettings;
 
 use Laravel\Nova\Nova;
 use Laravel\Nova\Tool;
 use Illuminate\Support\Str;
-use OptimistDigital\NovaSettings\Models\Settings;
+use Illuminate\Http\Request;
+use Laravel\Nova\Menu\MenuItem;
+use Laravel\Nova\Menu\MenuSection;
+use Outl1ne\NovaSettings\Models\Settings;
 
 class NovaSettings extends Tool
 {
     public function boot()
     {
-        Nova::script('nova-settings', __DIR__ . '/../dist/js/tool.js');
-
-        Nova::provideToScript([
-            'novaSettings' => [
-                'basePath' => config('nova-settings.base_path', 'nova-settings'),
-            ],
-        ]);
+        Nova::script('nova-settings', __DIR__ . '/../dist/js/entry.js');
     }
 
-    public function renderNavigation()
+    public function menu(Request $request)
     {
+        $fields = static::getFields();
+        $basePath = config('nova-settings.base_path', 'nova-settings');
         $isAuthorized = static::canSeeSettings();
         $showInSidebar = config('nova-settings.show_in_sidebar', true);
 
-        if ($isAuthorized && $showInSidebar) {
-            return view('nova-settings::navigation', [
-                'fields' => static::getFields(),
-                'basePath' => config('nova-settings.base_path', 'nova-settings'),
-            ]);
+        if (!$isAuthorized || !$showInSidebar || empty($fields)) return null;
+
+        $menuItems = [];
+        foreach ($fields as $key => $fields) {
+            $menuItems[] = MenuItem::link(self::getPageName($key), "{$basePath}/{$key}");
         }
+
+
+        return MenuSection::make(__('novaSettings.navigationItemTitle'), $menuItems)
+            ->icon('adjustments')
+            ->collapsable();
     }
 
     public static function getSettingsTableName(): string
@@ -50,7 +54,7 @@ class NovaSettings extends Tool
     public static function getAuthorizations($key = null)
     {
         $request = request();
-        $fakeResource = new \OptimistDigital\NovaSettings\Nova\Resources\Settings(NovaSettings::getSettingsModel()::make());
+        $fakeResource = new \Outl1ne\NovaSettings\Nova\Resources\Settings(NovaSettings::getSettingsModel()::make());
 
         $authorizations = [
             'authorizedToView' => $fakeResource->authorizedToView($request),
@@ -130,7 +134,7 @@ class NovaSettings extends Tool
         return array_key_exists($path, static::getFields());
     }
 
-    protected static function getStore(): NovaSettingsStore
+    public static function getStore(): NovaSettingsStore
     {
         return app()->make(NovaSettingsStore::class);
     }

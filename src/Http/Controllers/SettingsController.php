@@ -1,16 +1,17 @@
 <?php
 
-namespace OptimistDigital\NovaSettings\Http\Controllers;
+namespace Outl1ne\NovaSettings\Http\Controllers;
 
 use Laravel\Nova\Panel;
 use Illuminate\Http\Request;
 use Laravel\Nova\ResolvesFields;
 use Illuminate\Routing\Controller;
 use Laravel\Nova\Contracts\Resolvable;
+use Outl1ne\NovaSettings\NovaSettings;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Nova\Fields\FieldCollection;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Nova\Http\Requests\NovaRequest;
-use OptimistDigital\NovaSettings\NovaSettings;
 use Illuminate\Http\Resources\ConditionallyLoadsAttributes;
 
 class SettingsController extends Controller
@@ -114,22 +115,31 @@ class SettingsController extends Controller
 
         $existingRow = NovaSettings::getSettingsModel()::where('key', $fieldName)->first();
         if (isset($existingRow)) {
+            $field = collect(NovaSettings::getFields($pathName))->firstWhere('attribute', $fieldName);
+
+            // Delete file if exists
+            if (isset($field) && $field instanceof \Laravel\Nova\Fields\File) {
+                $disk = $field->getStorageDisk();
+                Storage::disk($disk)->delete($existingRow->value);
+            }
+
             $existingRow->value = null;
             $existingRow->save();
         }
+
         return response('', 204);
     }
 
     protected function availableFields($path = 'general')
     {
-        return (new FieldCollection(($this->filter(NovaSettings::getFields($path)))))->authorized(request());
+        return (new FieldCollection($this->filter(NovaSettings::getFields($path))))->authorized(request());
     }
 
     protected function fields(Request $request, $path = 'general')
     {
         return NovaSettings::getFields($path);
     }
-    
+
     protected function makeFakeResource(string $fieldName, $fieldValue)
     {
         $fakeResource = new \stdClass;
@@ -161,5 +171,13 @@ class SettingsController extends Controller
     protected function unauthorized()
     {
         return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    protected function assignToPanels($label, FieldCollection $fields)
+    {
+        return $fields->map(function ($field) use ($label) {
+            if (!$field->panel) $field->panel = $label;
+            return $field;
+        });
     }
 }

@@ -1,9 +1,9 @@
 <?php
 
-namespace OptimistDigital\NovaSettings\Models;
+namespace Outl1ne\NovaSettings\Models;
 
+use Outl1ne\NovaSettings\NovaSettings;
 use Illuminate\Database\Eloquent\Model;
-use OptimistDigital\NovaSettings\NovaSettings;
 
 class Settings extends Model
 {
@@ -16,6 +16,13 @@ class Settings extends Model
     {
         parent::__construct($attributes);
         $this->setTable(NovaSettings::getSettingsTableName());
+    }
+
+    protected static function booted()
+    {
+        static::updated(function ($setting) {
+            NovaSettings::getStore()->clearCache($setting->key);
+        });
     }
 
     public function setValueAttribute($value)
