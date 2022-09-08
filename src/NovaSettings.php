@@ -32,7 +32,7 @@ class NovaSettings extends Tool
         }
 
 
-        return MenuSection::make(__('novaSettings.navigationItemTitle'), $menuItems)
+        return MenuSection::make('Settings', $menuItems)
             ->icon('adjustments')
             ->collapsable();
     }
